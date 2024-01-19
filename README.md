@@ -1,6 +1,8 @@
 # ApolloDemo
 A Dashboard Demo using [Apollo](https://github.com/rickdotnet/Apollo)
 
+![Screenshot](/screenshot.png?raw=true)
+
 ## How-To
 Start a [NATS server](https://github.com/nats-io/nats-server) locally (or find/replace `localhost:4222`). Run the Dashboard. Run the "ThirdPartyService". Optionally, throw some bogus data around by running ZampleData.
 
