@@ -1,0 +1,87 @@
+﻿@using Dashboard.Endpoints
+@using Dashboard.Services
+@using Apollo.Core.Hosting
+@implements IDisposable
+@inject HeartbeatService HeartbeatService
+@inject IStateObserver StateObserver
+
+@if (heartbeats == null)
+{
+    <p class="text-muted">
+        <em>Loading...</em>
+    </p>
+}
+else
+{
+    @foreach (var heartbeat in heartbeats.Values.OrderBy(x => x.Id))
+    {
+        var thumbDirection = GetThumbDirection(heartbeat);
+        var heartbeatColor = GetHeartbeatColor(thumbDirection);
+        <div class="bg-white p-6 rounded-lg shadow-lg">
+            <div class="flex items-center space-x-4">
+                <div class="p-3 rounded-lg bg-@heartbeatColor-200 text-@heartbeatColor-600">
+                    <i class="las la-thumbs-@thumbDirection"></i>
+                </div>
+                <div>
+                    <p class="text-xl font-semibold">
+                        @heartbeat.DisplayName
+                    </p>
+                    <p class="text-xs text-gray-600">
+                        @heartbeat.UtcTimestamp.ToLocalTime()
+                    </p>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private Dictionary<string, HeartbeatEvent>? heartbeats;
+    private IDisposable? heartbeatSubscription;
+    private Timer? refreshTimer;
+
+protected override async Task OnInitializedAsync()
+{
+    heartbeats = await HeartbeatService.GetAllHeartbeatsAsync();
+    heartbeatSubscription = StateObserver.Register<HeartbeatEvent>(OnHeartbeatUpdated);
+    refreshTimer = new Timer(RefreshUI, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(10));
+}
+
+private async Task OnHeartbeatUpdated(HeartbeatEvent heartbeat)
+{
+    Console.WriteLine("OnHeartbeatUpdated");
+    refreshTimer?.Change(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    await InvokeAsync(() =>
+    {
+        Console.WriteLine("InvokeAsync");
+        heartbeats[heartbeat.Id] = heartbeat;
+        StateHasChanged();
+    });
+}
+
+    private async void RefreshUI(object? state)
+    {
+        await InvokeAsync(() => StateHasChanged());
+    }
+
+    // bg-green-200
+    // text-green-600
+    // bg-red-200
+    // text-red-600
+
+    
+    private string GetThumbDirection(HeartbeatEvent heartbeat)
+    {
+        return (DateTime.UtcNow - heartbeat.UtcTimestamp).TotalSeconds > 15 ? "down" : "up";
+    }
+    private string GetHeartbeatColor(string thumbDirection)
+    {
+        return thumbDirection.Equals("down") ? "red" : "green";
+    }
+
+    public void Dispose()
+    {
+        heartbeatSubscription?.Dispose();
+    }
+
+}

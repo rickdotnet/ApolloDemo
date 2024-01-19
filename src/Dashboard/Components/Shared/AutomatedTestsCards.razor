@@ -1,0 +1,101 @@
+﻿@using Dashboard.Endpoints
+@using Dashboard.Services
+@using Apollo.Core.Hosting
+@using Serilog
+@implements IDisposable
+@inject AutomatedTestService AutomatedTestService
+@inject IStateObserver StateObserver
+
+@if (testResults == null)
+{
+    <p class="text-muted">
+        <em>Loading...</em>
+    </p>
+}
+else
+{
+    @foreach (var group in testResults.OrderBy(x=>x.Key))
+    {
+        <div class="bg-white p-6 rounded-lg shadow-lg">
+            <h2 class="text-xl font-semibold mb-4">
+                @group.Key
+            </h2>
+            <div class="space-y-4">
+                @foreach (var testResult in group.Value)
+                {
+                    <div class="flex justify-between">
+                        <div>
+                            <div class="flex items-center">
+                                <h3 class="font-semibold">
+                                    @testResult.DisplayName
+                                </h3>
+                                <p class="sm:hidden lg:block ml-2 text-xs text-gray-600">@testResult.UtcTimestamp.ToLocalTime()</p>
+                            </div>
+                            <p class="text-sm text-gray-600">
+                                @(testResult.Description ?? "No description")
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs @GetStatusClass(testResult.Status) py-1 px-2 rounded-full">
+                                @testResult.Status
+                            </span>
+                        </div>
+                    </div>
+                }
+                @if (group.Value.Any())
+                {
+                    <button class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg mt-4">
+                        Show all Tests
+                    </button>
+                }
+           </div>
+        </div>
+    }
+}
+
+@code {
+    private Dictionary<string, List<AutomatedTestResultEvent>>? testResults;
+    private IDisposable? testResultsSubscription;
+
+    protected override async Task OnInitializedAsync()
+    {
+        testResults = await AutomatedTestService.GetAllTestResultsAsync();
+        testResultsSubscription = StateObserver.Register<AutomatedTestResultEvent>(OnTestResultUpdated);
+    }
+
+    private async Task OnTestResultUpdated(AutomatedTestResultEvent testResult)
+    {
+        await InvokeAsync(() =>
+        {
+            if (testResults.TryGetValue(testResult.TestId, out var results))
+            {
+                Log.Information("Updating test result for {Test}", testResult.Id);
+                if (!results.Any(x => x.Id == testResult.Id))
+                    results.Add(testResult);
+            }
+            else
+            {
+                testResults[testResult.TestId] = new List<AutomatedTestResultEvent> { testResult };
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Pass" => "bg-green-200 text-green-600",
+            "Fail" => "bg-red-200 text-red-600",
+            "Skipped" => "bg-gray-200 text-gray-600", // Changed from black to secondary for better readability
+            _ => "bg-yellow-200 text-yellow-600" // For any other status, use a warning color
+        };
+    }
+
+    public void Dispose()
+    {
+        testResultsSubscription?.Dispose();
+    }
+
+}
